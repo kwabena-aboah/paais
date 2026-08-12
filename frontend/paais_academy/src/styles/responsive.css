@@ -1,0 +1,58 @@
+/* Shared mobile and tablet safety rules. */
+html,
+body,
+#app {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img,
+video,
+iframe {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+@media (max-width: 991px) {
+  .container,
+  .container-fluid {
+    width: 100%;
+    max-width: 100%;
+    padding-inline: clamp(1rem, 3vw, 2rem);
+  }
+
+  .row {
+    --bs-gutter-x: 1rem;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 575px) {
+  .container,
+  .container-fluid {
+    padding-inline: 0.875rem;
+  }
+
+  h1 {
+    font-size: clamp(1.7rem, 8vw, 2.25rem);
+  }
+
+  .card-body,
+  .analytics-card,
+  .course-card {
+    padding: 1.15rem;
+  }
+
+  .btn-lg {
+    width: 100%;
+  }
+}

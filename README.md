@@ -1,0 +1,1 @@
+Learn the AI tools that do your everyday work. Free, practical micro-courses for African professionals. No coding, no jargon — just the task on your desk today, finished faster with AI. Pick your business function and start in 20 minutes.

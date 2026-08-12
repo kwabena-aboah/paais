@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PAAIS Academy - Learn AI tools that do your everyday work">
+    <meta name="author" content="Pan African AI Summits & Corporate Training Ltd">
+    <meta name="theme-color" content="#0A0A33">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    
+    <!-- Title -->
+    <title>PAAIS Academy - AI Tools for African Professionals</title>
+    
+    <!-- Meta Tags for SEO -->
+    <meta property="og:title" content="PAAIS Academy - Learn AI Tools">
+    <meta property="og:description" content="Master ChatGPT, Claude, Gemini for your business function">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://paaisacademy.com">
+    <meta name="twitter:card" content="summary_large_image">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Preload Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Base Styles -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body, #app {
+            height: 100%;
+            width: 100%;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #ffffff;
+            color: #1B1B3A;
+            overflow-x: hidden;
+        }
+        
+        /* Loading Animation */
+        #app:empty::before {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(10, 10, 51, 0.1);
+            border-top-color: #E900FF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Main App Container -->
+    <div id="app"></div>
+    
+    <!-- Main Vue App Script -->
+    <script type="module" src="/src/main.js"></script>
+    
+    <!-- Analytics (Optional) -->
+    <script>
+        // Google Analytics, Mixpanel, etc.
+        // Add your analytics code here
+    </script>
+    
+    <!-- Sentry Error Tracking (Optional) -->
+    <script>
+        // if (import.meta.env.PROD) {
+        //   import('@sentry/vue').then(({ init }) => {
+        //     init({
+        //       dsn: import.meta.env.VITE_SENTRY_DSN,
+        //       integrations: [new BrowserTracing()],
+        //       tracesSampleRate: 0.1,
+        //     });
+        //   });
+        // }
+    </script>
+</body>
+</html>
