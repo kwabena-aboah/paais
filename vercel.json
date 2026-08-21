@@ -1,10 +1,11 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+
   "builds": [
     {
-      "src": "paais_academy/paais_academy/wsgi.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "15mb", "runtime": "python3.11" }
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
     {
       "src": "frontend/paais_academy/package.json",
@@ -14,25 +15,19 @@
       }
     }
   ],
-  "routes": [
+
+  "rewrites": [
     {
-      "src": "/api/v1/(.*)",
-      "dest": "paais_academy/paais_academy/wsgi.py"
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
     },
     {
-      "src": "/static/admin/(.*)",
-      "dest": "paais_academy/staticfiles/admin/$1"
+      "source": "/admin/(.*)",
+      "destination": "/api/index.py"
     },
     {
-      "src": "/static/rest_framework/(.*)",
-      "dest": "paais_academy/staticfiles/rest_framework/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "frontend/paais_academy/$1"
+      "source": "/(.*)",
+      "destination": "/frontend/paais_academy/$1"
     }
   ]
 }
