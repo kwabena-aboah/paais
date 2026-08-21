@@ -4,7 +4,7 @@
 
   "builds": [
     {
-      "src": "api/index.py",
+      "src": "paais_academy/api/index.py",
       "use": "@vercel/python"
     },
     {
@@ -19,15 +19,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/paais_academy/api/index.py"
     },
     {
       "source": "/admin/(.*)",
-      "destination": "/api/index.py"
+      "destination": "/paais_academy/api/index.py"
     },
     {
       "source": "/(.*)",
-      "destination": "/frontend/paais_academy/$1"
+      "destination": "/frontend/paais_academy/dist/index.html"
     }
   ]
 }
