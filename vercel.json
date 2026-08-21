@@ -19,14 +19,14 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/index.py"
+      "dest": "/api/index.py"
     },
     {
       "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/paais_academy/$1"
+      "dest": "/frontend/paais_academy/dist/index.html"
     }
   ]
 }
