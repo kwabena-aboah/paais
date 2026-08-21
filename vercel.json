@@ -16,7 +16,7 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/api/v1/(.*)",
       "dest": "paais_academy/paais_academy/wsgi.py"
     },
     {
