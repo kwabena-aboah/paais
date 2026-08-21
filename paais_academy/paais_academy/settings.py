@@ -14,7 +14,7 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default="localhost,127.0.0.1,.vercel.app",
+    default="localhost,127.0.0.1,paais.vercel.app",
     cast=Csv(),
 )
 
@@ -84,7 +84,8 @@ WSGI_APPLICATION = 'paais_academy.wsgi.application'
 # Supabase PostgreSQL connection
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
+        # default=os.environ.get('DATABASE_URL'),
+        default="postgres://postgres.rjugbfjlsjchivbfhdcw:LL3ikaVUgZcyEBs6@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require",
         conn_max_age=600,  # Keeps connections alive briefly for lambda warm-starts
         ssl_require=True   # Supabase forces SSL connections
     )
@@ -127,6 +128,7 @@ USE_TZ = True
 # Static files (WhiteNoise + Cloudflare)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = config('MEDIA_URL', default='/media/')
@@ -204,8 +206,8 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@paaisacademy.
 EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
 
 # Celery Configuration
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://default:KR3Jgxy1KiGWoAuXeD53I3BwC5WhDI5f@seat-sort-oriole-64954.db.redis.io:18116')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://default:KR3Jgxy1KiGWoAuXeD53I3BwC5WhDI5f@seat-sort-oriole-64954.db.redis.io:18116')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
