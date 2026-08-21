@@ -27,7 +27,7 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/frontend/paais_academy/dist/index.html"
+      "destination": "/frontend/paais_academy/$1"
     }
   ]
 }
