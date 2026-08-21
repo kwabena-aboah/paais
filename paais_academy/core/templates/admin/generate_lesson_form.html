@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<h1>Generate lesson draft with AI</h1>
+<p>Track: <strong>{{ track.name }}</strong>. The lesson will be saved unpublished for review.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <div class="submit-row">
+    <input type="submit" value="Generate lesson draft" class="default">
+    <a href="{% url 'admin:core_track_changelist' %}" class="button cancel-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

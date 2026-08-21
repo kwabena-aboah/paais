@@ -24,6 +24,9 @@ application = WhiteNoise(
     }
 )
 
+# ADD THIS LINE FOR VERCEL:
+app = application
+
 # Run migrations on startup (optional - for Render.com or similar)
 if os.getenv('RUN_MIGRATIONS') == 'true':
     try:

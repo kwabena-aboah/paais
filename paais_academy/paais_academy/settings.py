@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from decouple import config, Csv
 from datetime import timedelta
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -13,7 +14,7 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='localhost,127.0.0.1,testserver',
+    default="localhost,127.0.0.1,.vercel.app",
     cast=Csv(),
 )
 
@@ -69,17 +70,25 @@ WSGI_APPLICATION = 'paais_academy.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql' if config('DB_ENGINE', default='sqlite') == 'postgresql' else 'django.db.backends.sqlite3',
-        'NAME': config('DB_NAME', default=str(BASE_DIR / 'db.sqlite3')),
-        'USER': config('DB_USER', default=''),
-        'PASSWORD': config('DB_PASSWORD', default=''),
-        'HOST': config('DB_HOST', default=''),
-        'PORT': config('DB_PORT', default=''),
-    }
-}
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql' if config('DB_ENGINE', default='sqlite') == 'postgresql' else 'django.db.backends.sqlite3',
+#         'NAME': config('DB_NAME', default=str(BASE_DIR / 'db.sqlite3')),
+#         'USER': config('DB_USER', default=''),
+#         'PASSWORD': config('DB_PASSWORD', default=''),
+#         'HOST': config('DB_HOST', default=''),
+#         'PORT': config('DB_PORT', default=''),
+#     }
+# }
 
+# Supabase PostgreSQL connection
+DATABASES = {
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
+        conn_max_age=600,  # Keeps connections alive briefly for lambda warm-starts
+        ssl_require=True   # Supabase forces SSL connections
+    )
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -199,6 +208,9 @@ CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+
+# Anthropic API Key
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10

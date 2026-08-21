@@ -128,6 +128,45 @@ class Lesson(models.Model):
         return f"{self.track.name} - {self.title}"
 
 
+class AIGenerationLog(models.Model):
+    """Audit/cost log for every AI lesson-generation call — one row per attempt."""
+ 
+    track = models.ForeignKey(
+        Track, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ai_generation_logs',
+    )
+    lesson = models.ForeignKey(
+        Lesson, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ai_generation_logs',
+        help_text="Set once the draft lesson is created from this call.",
+    )
+    topic = models.CharField(max_length=255)
+    level = models.CharField(max_length=20, blank=True)
+    triggered_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ai_generation_logs',
+    )
+ 
+    model = models.CharField(max_length=100, blank=True)
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    duration_seconds = models.FloatField(default=0)
+ 
+    success = models.BooleanField(default=False)
+    error_message = models.TextField(blank=True)
+    prompt_text = models.TextField(blank=True, help_text="Exact prompt sent to the model.")
+    response_json = models.JSONField(default=dict, blank=True, help_text="Structured model output for audit/debugging.")
+ 
+    created_at = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        ordering = ['-created_at']
+ 
+    def __str__(self):
+        return f"{self.topic} ({'ok' if self.success else 'failed'})"
+ 
+
+
 class UserProfile(models.Model):
     """Extended user profile"""
     

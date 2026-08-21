@@ -11,6 +11,14 @@ export default defineConfig({
       '/api/v1': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
+      },
+      '/static/admin': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/static/rest_framework': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
       }
     }
   },

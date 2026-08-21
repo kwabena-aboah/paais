@@ -1,6 +1,6 @@
 <template>
   <div class="track-detail-page" v-if="track">
-    <section class="track-hero" :style="{ backgroundColor: 'linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%)' }">
+    <section class="track-hero" :style="{ backgroundColor: 'var(--navy)' }">
       <div class="container-fluid">
         <div class="row">
           <div class="col-lg-8">
