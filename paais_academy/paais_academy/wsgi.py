@@ -7,13 +7,14 @@ from django.core.management import call_command
 from whitenoise import WhiteNoise
 
 # Set Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'paais_academy.settings')
+# Add the outer Django project directory to Python's import path.
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
-# Setup Django
-django.setup()
-
-# Get WSGI application
-application = get_wsgi_application()
+os.environ.setdefault(
+    "DJANGO_SETTINGS_MODULE",
+    "paais_academy.settings"
+)
 
 # Add WhiteNoise middleware for static files
 application = WhiteNoise(
