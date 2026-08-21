@@ -4,12 +4,11 @@
 
   "builds": [
     {
-      "src": "/paais_academy/api/index.py",
+      "src": "paais_academy/api/index.py",
       "use": "@vercel/python",
       "config": {
         "includeFiles": [
-          "paais_academy/staticfiles/**",
-          "paais_academy/static/**"
+          "paais_academy/staticfiles/**"
         ]
       }
     },
