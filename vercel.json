@@ -1,42 +1,38 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "builds": [
     {
-    "src": "api/index.py",
-    "use": "@vercel/python",
-    "config": {
-      "runtime": "python3.11"
+      "src": "paais_academy/paais_academy/wsgi.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.11" }
     },
-  "services": {
-    "frontend-vue": {
-      "root": "frontend/paais_academy/"
-    },
-    "backend-django": {
-      "root": "./",
-      "entrypoint": "paais_academy/wsgi.py"
+    {
+      "src": "frontend/paais_academy/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
-  },
-  "rewrites": [
+  ],
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "/paais_academy/wsgi.py"
+      "src": "/api/(.*)",
+      "dest": "paais_academy/paais_academy/wsgi.py"
     },
     {
-      "source": "/admin/(.*)",
-      "destination": "/paais_academy/wsgi.py"
+      "src": "/static/admin/(.*)",
+      "dest": "paais_academy/staticfiles/admin/$1"
     },
     {
-      "source": "/static/admin/(.*)",
-      "destination": "/staticfiles/admin/$1"
+      "src": "/static/rest_framework/(.*)",
+      "dest": "paais_academy/staticfiles/rest_framework/$1"
     },
     {
-      "source": "/static/rest_framework/(.*)",
-      "destination": "/staticfiles/rest_framework/$1"
+      "handle": "filesystem"
     },
     {
-      "source": "/(.*)",
-      "destination": { "service": "frontend-vue" }
+      "src": "/(.*)",
+      "dest": "frontend/paais_academy/$1"
     }
   ]
 }
