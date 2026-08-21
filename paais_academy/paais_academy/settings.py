@@ -13,8 +13,8 @@ SECRET_KEY = 'django-insecure-m&_ycs7$%4*ypq=0zr+q^0eq6d@_=sn!-hz8el!!t8(^-j&_kp
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config(
-    'ALLOWED_HOSTS',
-    default="localhost,127.0.0.1,paais.vercel.app",
+    "ALLOWED_HOSTS",
+    default="localhost,127.0.0.1,paais.vercel.app,.vercel.app",
     cast=Csv(),
 )
 
@@ -128,7 +128,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",

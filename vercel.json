@@ -4,8 +4,14 @@
 
   "builds": [
     {
-      "src": "paais_academy/api/index.py",
-      "use": "@vercel/python"
+      "src": "/paais_academy/api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": [
+          "/paais_academy/staticfiles/**",
+          "/paais_academy/static/**"
+        ]
+      }
     },
     {
       "src": "frontend/paais_academy/package.json",
@@ -23,6 +29,10 @@
     },
     {
       "source": "/admin/(.*)",
+      "destination": "/paais_academy/api/index.py"
+    },
+    {
+      "source": "/static/(.*)",
       "destination": "/paais_academy/api/index.py"
     },
     {
