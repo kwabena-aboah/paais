@@ -85,8 +85,8 @@ WSGI_APPLICATION = 'paais_academy.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
-        conn_max_age=600,  # Keeps connections alive briefly for lambda warm-starts
-        ssl_require=True   # Supabase forces SSL connections
+        conn_max_age=0,
+        ssl_require=True,
     )
 }
 
