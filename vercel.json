@@ -8,8 +8,8 @@
       "use": "@vercel/python",
       "config": {
         "includeFiles": [
-          "/paais_academy/staticfiles/**",
-          "/paais_academy/static/**"
+          "paais_academy/staticfiles/**",
+          "paais_academy/static/**"
         ]
       }
     },
