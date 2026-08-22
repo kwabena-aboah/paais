@@ -225,6 +225,10 @@ ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 OTP_EXPIRY_MINUTES = 10
 OTP_MAX_ATTEMPTS = 3
 
+# Arkesel SMS Configuration
+ARKESEL_API_KEY = config('ARKESEL_API_KEY', default='')
+ARKESEL_SENDER_ID = config('ARKESEL_SENDER_ID', default='PAAIS')
+
 # App Settings
 APP_NAME = 'PAAIS Academy'
 APP_DESCRIPTION = 'Learn the AI tools that do your everyday work'

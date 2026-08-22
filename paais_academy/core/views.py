@@ -92,12 +92,30 @@ class OTPRegistrationView(APIView):
             otp_code=otp_code,
             expires_at=expires_at
         )
-        
-        # Send OTP (SMS or Email)
-        if contact_type == 'phone':
-            self._send_sms(contact, otp_code)
-        else:
-            self._send_email(contact, otp_code)
+
+        try:
+            if contact_type == 'phone':
+                self._send_sms(contact, otp_code)
+            else:
+                self._send_email(contact, otp_code)
+
+        except Exception as exc:
+            otp.delete()
+
+            print(
+                f'[OTP DELIVERY ERROR] {exc}',
+                flush=True
+            )
+
+            return Response(
+                {
+                    'error': (
+                        'We could not send your verification code. '
+                        'Please try again.'
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
         
         # Store registration data in session for later use
         request.session['registration_data'] = {
@@ -114,12 +132,88 @@ class OTPRegistrationView(APIView):
         }, status=status.HTTP_200_OK)
     
     def _send_sms(self, phone, code):
-        """Log SMS OTPs in development until an SMS provider is configured."""
-        if settings.DEBUG:
-            print(f'\n[PAAIS Academy OTP - phone: {phone}] {code}\n', flush=True)
-            return
+    """Send registration OTP through Arkesel SMS API."""
 
-        raise RuntimeError('Phone OTP delivery is not configured for production.')
+    # Development
+    if settings.DEBUG:
+        print(
+            f'\n[PAAIS Academy OTP - phone: {phone}] {code}\n',
+            flush=True
+        )
+        return
+
+    api_key = settings.ARKESEL_API_KEY
+    sender_id = settings.ARKESEL_SENDER_ID
+
+    if not api_key:
+        raise RuntimeError(
+            'ARKESEL_API_KEY is not configured for production.'
+        )
+
+    if not sender_id:
+        raise RuntimeError(
+            'ARKESEL_SENDER_ID is not configured for production.'
+        )
+
+    # Convert Ghana numbers to international format
+    phone = phone.strip()
+
+    if phone.startswith('+'):
+        phone = phone[1:]
+
+    if phone.startswith('0'):
+        phone = '233' + phone[1:]
+
+    # Arkesel expects Ghana numbers like:
+    # 233XXXXXXXXX
+
+    message = (
+        f'Your PAAIS Academy verification code is {code}. '
+        f'It expires in 10 minutes.'
+    )
+
+    try:
+        response = requests.post(
+            'https://sms.arkesel.com/api/v2/sms/send',
+            headers={
+                'api-key': api_key,
+                'Content-Type': 'application/json',
+            },
+            json={
+                'sender': sender_id,
+                'message': message,
+                'recipients': [
+                    phone
+                ],
+            },
+            timeout=15,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        print(
+            f'[Arkesel SMS] Response: {data}',
+            flush=True
+        )
+
+        if data.get('status') != 'success':
+            raise RuntimeError(
+                f'Arkesel rejected SMS request: {data}'
+            )
+
+        return data
+
+    except requests.RequestException as exc:
+        print(
+            f'[Arkesel SMS ERROR] {exc}',
+            flush=True
+        )
+
+        raise RuntimeError(
+            'Unable to send verification SMS. Please try again.'
+        ) from exc
 
     def _send_email(self, email, code):
         """Print OTPs in development and email them in production."""
