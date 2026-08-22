@@ -170,57 +170,96 @@ class OTPRegistrationView(APIView):
         }, status=status.HTTP_200_OK)
     
     def _send_sms(self, phone, code):
-        """Send OTP through Arkesel SMS API v2."""
+        """
+        Send OTP SMS through Arkesel.
+        """
 
-        if settings.DEBUG:
-            print(
-                f'\n[PAAIS Academy OTP - phone: {phone}] {code}\n',
-                flush=True
-            )
-            return
-
-        api_key = settings.ARKESEL_API_KEY
-        sender_id = settings.ARKESEL_SENDER_ID
+        api_key = config('ARKESEL_API_KEY', default='').strip()
+        sender = config('ARKESEL_SENDER', default='PAAIS').strip()
 
         if not api_key:
-            raise RuntimeError(
-                'ARKESEL_API_KEY is not configured.'
-            )
+            print('[ARKESEL] API key is missing', flush=True)
+            raise RuntimeError('SMS service is not configured.')
+
+        if not sender:
+            print('[ARKESEL] Sender ID is missing', flush=True)
+            raise RuntimeError('SMS sender is not configured.')
+
+        # Keep the international number exactly as supplied.
+        phone = str(phone).strip()
+
+        # Make sure Ghana/local numbers are converted to international format.
+        if phone.startswith('0'):
+            phone = '+233' + phone[1:]
+
+        # Remove spaces, hyphens and brackets
+        phone = (
+            phone.replace(' ', '')
+                 .replace('-', '')
+                 .replace('(', '')
+                 .replace(')', '')
+        )
 
         message = (
             f'Your PAAIS Academy verification code is {code}. '
             f'It expires in 10 minutes.'
         )
 
+        url = 'https://sms.arkesel.com/api/v2/sms/send'
+
+        payload = {
+            'sender': sender,
+            'message': message,
+            'recipients': [phone],
+        }
+
+        headers = {
+            'api-key': api_key,
+            'Content-Type': 'application/json',
+        }
+
         try:
             response = requests.post(
-                'https://sms.arkesel.com/api/v2/sms/send',
-                headers={
-                    'api-key': api_key,
-                    'Content-Type': 'application/json',
-                },
-                json={
-                    'sender': sender_id,
-                    'message': message,
-                    'recipients': [phone],
-                },
-                timeout=15,
+                url,
+                json=payload,
+                headers=headers,
+                timeout=20,
             )
 
-            data = response.json()
+            print(
+                f'[ARKESEL] HTTP STATUS: {response.status_code}',
+                flush=True
+            )
+
+            print(
+                f'[ARKESEL] RESPONSE: {response.text}',
+                flush=True
+            )
 
             if not response.ok:
+                raise RuntimeError(
+                    f'Arkesel HTTP error: {response.status_code}'
+                )
+
+            try:
+                data = response.json()
+            except ValueError:
+                raise RuntimeError(
+                    'Arkesel returned an invalid response.'
+                )
+
+            if data.get('status') != 'success':
                 print(
-                    f'[Arkesel SMS ERROR] {data}',
+                    f'[ARKESEL ERROR] {data}',
                     flush=True
                 )
 
                 raise RuntimeError(
-                    'Unable to send verification SMS.'
+                    data.get('message', 'Unable to send verification SMS.')
                 )
 
             print(
-                f'[Arkesel SMS SUCCESS] {data}',
+                f'[ARKESEL SUCCESS] SMS accepted for {phone}',
                 flush=True
             )
 
@@ -228,13 +267,13 @@ class OTPRegistrationView(APIView):
 
         except requests.RequestException as exc:
             print(
-                f'[Arkesel SMS ERROR] {exc}',
+                f'[ARKESEL NETWORK ERROR] {exc}',
                 flush=True
             )
 
             raise RuntimeError(
-                'Unable to send verification SMS.'
-            ) from exc
+                'Unable to connect to SMS provider.'
+            )
 
     def _send_email(self, email, code):
         """Print OTPs in development and email them in production."""
