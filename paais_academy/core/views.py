@@ -14,6 +14,7 @@ from datetime import timedelta
 import requests
 import random
 import string
+import re
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 from decouple import config
@@ -54,6 +55,42 @@ def health_check(request):
         )
 
 
+def normalize_phone_number(phone):
+    """
+    Normalize Ghana phone numbers to international E.164 format.
+
+    Examples:
+        0241234567       -> +233241234567
+        241234567        -> +233241234567
+        233241234567     -> +233241234567
+        +233241234567    -> +233241234567
+    """
+
+    if not phone:
+        return phone
+
+    # Remove spaces, hyphens, brackets, etc.
+    phone = re.sub(r'[^\d+]', '', str(phone).strip())
+
+    # Remove international dialing prefix
+    if phone.startswith('00'):
+        phone = phone[2:]
+
+    # Already has +
+    if phone.startswith('+'):
+        digits = phone[1:]
+    else:
+        digits = phone
+
+    # Ghana local format: 0241234567
+    if digits.startswith('0') and len(digits) == 10:
+        digits = '233' + digits[1:]
+
+    # Ghana format without leading zero: 241234567
+    elif len(digits) == 9 and digits.startswith(('2', '5')):
+        digits = '233' + digits
+
+    return f'+{digits}'
 # ============================================================
 # Authentication & Registration Views
 # ============================================================
@@ -73,8 +110,14 @@ class OTPRegistrationView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        contact = serializer.validated_data['contact']
+        contact = serializer.validated_data['contact'].strip()
         contact_type = serializer.validated_data['contact_type']
+
+        # Normalize phone numbers before saving and sending
+        if contact_type == 'phone':
+            contact = normalize_phone_number(contact)
+        else:
+            contact = contact.lower()
         
         # Generate OTP
         otp_code = ''.join(random.choices(string.digits, k=6))
@@ -132,9 +175,8 @@ class OTPRegistrationView(APIView):
         }, status=status.HTTP_200_OK)
     
     def _send_sms(self, phone, code):
-        """Send registration OTP through Arkesel SMS API."""
+        """Send OTP through Arkesel SMS API v2."""
 
-        # Development
         if settings.DEBUG:
             print(
                 f'\n[PAAIS Academy OTP - phone: {phone}] {code}\n',
@@ -147,25 +189,8 @@ class OTPRegistrationView(APIView):
 
         if not api_key:
             raise RuntimeError(
-                'ARKESEL_API_KEY is not configured for production.'
+                'ARKESEL_API_KEY is not configured.'
             )
-
-        if not sender_id:
-            raise RuntimeError(
-                'ARKESEL_SENDER_ID is not configured for production.'
-            )
-
-        # Convert Ghana numbers to international format
-        phone = phone.strip()
-
-        if phone.startswith('+'):
-            phone = phone[1:]
-
-        if phone.startswith('0'):
-            phone = '233' + phone[1:]
-
-        # Arkesel expects Ghana numbers like:
-        # 233XXXXXXXXX
 
         message = (
             f'Your PAAIS Academy verification code is {code}. '
@@ -182,26 +207,27 @@ class OTPRegistrationView(APIView):
                 json={
                     'sender': sender_id,
                     'message': message,
-                    'recipients': [
-                        phone
-                    ],
+                    'recipients': [phone],
                 },
                 timeout=15,
             )
 
-            response.raise_for_status()
-
             data = response.json()
 
+            if not response.ok:
+                print(
+                    f'[Arkesel SMS ERROR] {data}',
+                    flush=True
+                )
+
+                raise RuntimeError(
+                    'Unable to send verification SMS.'
+                )
+
             print(
-                f'[Arkesel SMS] Response: {data}',
+                f'[Arkesel SMS SUCCESS] {data}',
                 flush=True
             )
-
-            if data.get('status') != 'success':
-                raise RuntimeError(
-                    f'Arkesel rejected SMS request: {data}'
-                )
 
             return data
 
@@ -212,7 +238,7 @@ class OTPRegistrationView(APIView):
             )
 
             raise RuntimeError(
-                'Unable to send verification SMS. Please try again.'
+                'Unable to send verification SMS.'
             ) from exc
 
     def _send_email(self, email, code):
@@ -238,103 +264,175 @@ class OTPRegistrationView(APIView):
 
 
 class OTPVerifyView(APIView):
-    """Verify OTP and create user account"""
-    
+    """Verify OTP and create user account."""
+
     permission_classes = [permissions.AllowAny]
-    
+
     def post(self, request):
         serializer = OTPVerifySerializer(data=request.data)
-        
+
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         contact = serializer.validated_data['contact'].strip()
+        otp_code = serializer.validated_data['otp_code'].strip()
+
+        # Normalize contact exactly as we did when sending the OTP
         if '@' in contact:
             contact = contact.lower()
-        otp_code = serializer.validated_data['otp_code'].strip()
-        
-        # Verify OTP
+        else:
+            contact = normalize_phone_number(contact)
+
         try:
             otp = OTPVerification.objects.get(
                 phone_or_email=contact,
                 otp_code=otp_code,
                 is_verified=False
             )
-            
+
+            # Check expiry
             if otp.is_expired():
                 otp.delete()
+
                 return Response(
                     {'error': 'OTP expired'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
+            # Check maximum attempts
             if otp.attempts >= 3:
                 otp.delete()
+
                 return Response(
-                    {'error': 'Too many attempts'},
+                    {'error': 'Too many attempts. Please request a new code.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Mark as verified
+
+            # Mark OTP as verified
             otp.is_verified = True
-            otp.save()
-            
-            # Get registration data
-            reg_data = request.session.get('registration_data', {})
-            
-            # Create or get user
+            otp.save(update_fields=['is_verified'])
+
+            # Retrieve registration data
+            reg_data = request.session.get(
+                'registration_data',
+                {}
+            )
+
+            # ===============================
+            # EMAIL REGISTRATION
+            # ===============================
             if '@' in contact:
+
+                username_base = contact.split('@')[0]
+
                 user, created = User.objects.get_or_create(
                     email=contact,
-                    defaults={'username': contact.split('@')[0]}
+                    defaults={
+                        'username': username_base
+                    }
                 )
+
+            # ===============================
+            # PHONE REGISTRATION
+            # ===============================
             else:
-                username = f"user_{contact[-6:]}"
+
+                # Use the normalized international number
+                # to create a predictable username
+                phone_digits = re.sub(
+                    r'\D',
+                    '',
+                    contact
+                )
+
+                username = f'user_{phone_digits}'
+
                 user, created = User.objects.get_or_create(
                     username=username,
-                    defaults={'email': f"{username}@paaisacademy.com"}
+                    defaults={
+                        'email': (
+                            f'{phone_digits}@paaisacademy.local'
+                        )
+                    }
                 )
-            
-            # Create or update profile
-            profile, _ = UserProfile.objects.get_or_create(user=user)
+
+            # ===============================
+            # CREATE / UPDATE PROFILE
+            # ===============================
+
+            profile, _ = UserProfile.objects.get_or_create(
+                user=user
+            )
+
             if '@' not in contact:
                 profile.phone = contact
+
             profile.business_function = (
-                reg_data.get('business_function') or profile.business_function or ''
+                reg_data.get('business_function')
+                or profile.business_function
+                or ''
             )
-            profile.country = reg_data.get('country') or profile.country or ''
-            profile.company_name = reg_data.get('company_name') or ''
+
+            profile.country = (
+                reg_data.get('country')
+                or profile.country
+                or ''
+            )
+
+            profile.company_name = (
+                reg_data.get('company_name')
+                or profile.company_name
+                or ''
+            )
+
             profile.is_verified = True
             profile.save()
-            
-            # Generate JWT tokens
+
+            # ===============================
+            # GENERATE JWT
+            # ===============================
+
             refresh = RefreshToken.for_user(user)
-            
-            # Clear session
-            request.session.pop('registration_data', None)
-            
-            return Response({
-                'user_id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'profile': UserProfileSerializer(profile).data,
-            }, status=status.HTTP_201_CREATED)
-        
+
+            # Remove registration data from session
+            request.session.pop(
+                'registration_data',
+                None
+            )
+
+            return Response(
+                {
+                    'user_id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'profile': UserProfileSerializer(profile).data,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
         except OTPVerification.DoesNotExist:
-            if otp_exists := OTPVerification.objects.filter(
+
+            # Find the active OTP and increase attempts
+            otp_exists = OTPVerification.objects.filter(
                 phone_or_email=contact,
                 is_verified=False
-            ).first():
+            ).first()
+
+            if otp_exists:
                 otp_exists.attempts += 1
-                otp_exists.save()
-            
+                otp_exists.save(
+                    update_fields=['attempts']
+                )
+
             return Response(
                 {'error': 'Invalid OTP'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
 
 # ============================================================
 # Track & Lesson Views

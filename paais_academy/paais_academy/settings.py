@@ -213,8 +213,8 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@paaisacademy.
 EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=10, cast=int)
 
 # Celery Configuration
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://default:KR3Jgxy1KiGWoAuXeD53I3BwC5WhDI5f@seat-sort-oriole-64954.db.redis.io:18116')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://default:KR3Jgxy1KiGWoAuXeD53I3BwC5WhDI5f@seat-sort-oriole-64954.db.redis.io:18116')
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
