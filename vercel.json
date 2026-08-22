@@ -1,42 +1,13 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-
-  "builds": [
-    {
-      "src": "paais_academy/api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "includeFiles": [
-          "paais_academy/staticfiles/**"
-        ]
-      }
-    },
-    {
-      "src": "frontend/paais_academy/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+    "experimentalServices": {
+        "frontend": {
+            "entrypoint": "frontend",
+            "routePrefix": "/",
+            "framework": "vite"
+        },
+        "backend": {
+            "entrypoint": "paais_academy",
+            "routePrefix": "/_/paais_academy"
+        }
     }
-  ],
-
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/paais_academy/api/index.py"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/paais_academy/api/index.py"
-    },
-    {
-      "source": "/static/(.*)",
-      "destination": "/paais_academy/api/index.py"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/frontend/paais_academy/$1"
-    }
-  ]
 }
