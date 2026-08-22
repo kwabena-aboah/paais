@@ -56,41 +56,31 @@ def health_check(request):
 
 
 def normalize_phone_number(phone):
-    """
-    Normalize Ghana phone numbers to international E.164 format.
+    phone = str(phone).strip()
 
-    Examples:
-        0241234567       -> +233241234567
-        241234567        -> +233241234567
-        233241234567     -> +233241234567
-        +233241234567    -> +233241234567
-    """
+    phone = (
+        phone.replace(' ', '')
+        .replace('-', '')
+        .replace('(', '')
+        .replace(')', '')
+    )
 
-    if not phone:
-        return phone
-
-    # Remove spaces, hyphens, brackets, etc.
-    phone = re.sub(r'[^\d+]', '', str(phone).strip())
-
-    # Remove international dialing prefix
-    if phone.startswith('00'):
-        phone = phone[2:]
-
-    # Already has +
     if phone.startswith('+'):
-        digits = phone[1:]
-    else:
-        digits = phone
+        phone = phone[1:]
 
-    # Ghana local format: 0241234567
-    if digits.startswith('0') and len(digits) == 10:
-        digits = '233' + digits[1:]
+    # Ghana local format
+    if phone.startswith('0') and len(phone) == 10:
+        phone = '233' + phone[1:]
 
-    # Ghana format without leading zero: 241234567
-    elif len(digits) == 9 and digits.startswith(('2', '5')):
-        digits = '233' + digits
+    # Prevent 2330241234567
+    if phone.startswith('2330'):
+        phone = '233' + phone[4:]
 
-    return f'+{digits}'
+    if not phone.isdigit():
+        raise ValueError('Invalid phone number.')
+
+    return phone
+    
 # ============================================================
 # Authentication & Registration Views
 # ============================================================
@@ -113,9 +103,14 @@ class OTPRegistrationView(APIView):
         contact = serializer.validated_data['contact'].strip()
         contact_type = serializer.validated_data['contact_type']
 
-        # Normalize phone numbers before saving and sending
         if contact_type == 'phone':
-            contact = normalize_phone_number(contact)
+            try:
+                contact = normalize_phone_number(contact)
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid phone number format.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         else:
             contact = contact.lower()
         
@@ -272,6 +267,11 @@ class OTPVerifyView(APIView):
         serializer = OTPVerifySerializer(data=request.data)
 
         if not serializer.is_valid():
+            print(
+                f'[OTP VERIFY VALIDATION ERROR] {serializer.errors}',
+                flush=True
+            )
+
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
@@ -280,11 +280,27 @@ class OTPVerifyView(APIView):
         contact = serializer.validated_data['contact'].strip()
         otp_code = serializer.validated_data['otp_code'].strip()
 
-        # Normalize contact exactly as we did when sending the OTP
+        # Normalize phone numbers, but preserve emails.
         if '@' in contact:
             contact = contact.lower()
         else:
-            contact = normalize_phone_number(contact)
+            try:
+                contact = normalize_phone_number(contact)
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid phone number format.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        print(
+            f'[OTP VERIFY] Contact: {contact}',
+            flush=True
+        )
+
+        print(
+            f'[OTP VERIFY] OTP: {otp_code}',
+            flush=True
+        )
 
         try:
             otp = OTPVerification.objects.get(
@@ -293,131 +309,8 @@ class OTPVerifyView(APIView):
                 is_verified=False
             )
 
-            # Check expiry
-            if otp.is_expired():
-                otp.delete()
-
-                return Response(
-                    {'error': 'OTP expired'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Check maximum attempts
-            if otp.attempts >= 3:
-                otp.delete()
-
-                return Response(
-                    {'error': 'Too many attempts. Please request a new code.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Mark OTP as verified
-            otp.is_verified = True
-            otp.save(update_fields=['is_verified'])
-
-            # Retrieve registration data
-            reg_data = request.session.get(
-                'registration_data',
-                {}
-            )
-
-            # ===============================
-            # EMAIL REGISTRATION
-            # ===============================
-            if '@' in contact:
-
-                username_base = contact.split('@')[0]
-
-                user, created = User.objects.get_or_create(
-                    email=contact,
-                    defaults={
-                        'username': username_base
-                    }
-                )
-
-            # ===============================
-            # PHONE REGISTRATION
-            # ===============================
-            else:
-
-                # Use the normalized international number
-                # to create a predictable username
-                phone_digits = re.sub(
-                    r'\D',
-                    '',
-                    contact
-                )
-
-                username = f'user_{phone_digits}'
-
-                user, created = User.objects.get_or_create(
-                    username=username,
-                    defaults={
-                        'email': (
-                            f'{phone_digits}@paaisacademy.local'
-                        )
-                    }
-                )
-
-            # ===============================
-            # CREATE / UPDATE PROFILE
-            # ===============================
-
-            profile, _ = UserProfile.objects.get_or_create(
-                user=user
-            )
-
-            if '@' not in contact:
-                profile.phone = contact
-
-            profile.business_function = (
-                reg_data.get('business_function')
-                or profile.business_function
-                or ''
-            )
-
-            profile.country = (
-                reg_data.get('country')
-                or profile.country
-                or ''
-            )
-
-            profile.company_name = (
-                reg_data.get('company_name')
-                or profile.company_name
-                or ''
-            )
-
-            profile.is_verified = True
-            profile.save()
-
-            # ===============================
-            # GENERATE JWT
-            # ===============================
-
-            refresh = RefreshToken.for_user(user)
-
-            # Remove registration data from session
-            request.session.pop(
-                'registration_data',
-                None
-            )
-
-            return Response(
-                {
-                    'user_id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'profile': UserProfileSerializer(profile).data,
-                },
-                status=status.HTTP_201_CREATED
-            )
-
         except OTPVerification.DoesNotExist:
 
-            # Find the active OTP and increase attempts
             otp_exists = OTPVerification.objects.filter(
                 phone_or_email=contact,
                 is_verified=False
@@ -425,14 +318,118 @@ class OTPVerifyView(APIView):
 
             if otp_exists:
                 otp_exists.attempts += 1
-                otp_exists.save(
-                    update_fields=['attempts']
-                )
+                otp_exists.save(update_fields=['attempts'])
+
+            print(
+                '[OTP VERIFY] Invalid OTP',
+                flush=True
+            )
 
             return Response(
                 {'error': 'Invalid OTP'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Check expiry
+        if otp.is_expired():
+            otp.delete()
+
+            return Response(
+                {'error': 'OTP expired'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check attempts
+        if otp.attempts >= 3:
+            otp.delete()
+
+            return Response(
+                {'error': 'Too many attempts'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Mark OTP as verified
+        otp.is_verified = True
+        otp.save(update_fields=['is_verified'])
+
+        # Retrieve registration information
+        reg_data = request.session.get(
+            'registration_data',
+            {}
+        )
+
+        # Create or retrieve user
+        if '@' in contact:
+
+            user, created = User.objects.get_or_create(
+                email=contact,
+                defaults={
+                    'username': contact.split('@')[0]
+                }
+            )
+
+        else:
+
+            username = f"user_{contact[-6:]}"
+
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    'email': f"{username}@paaisacademy.com"
+                }
+            )
+
+        # Create/update profile
+        profile, _ = UserProfile.objects.get_or_create(
+            user=user
+        )
+
+        if '@' not in contact:
+            profile.phone = contact
+
+        profile.business_function = (
+            reg_data.get('business_function')
+            or profile.business_function
+            or ''
+        )
+
+        profile.country = (
+            reg_data.get('country')
+            or profile.country
+            or ''
+        )
+
+        profile.company_name = (
+            reg_data.get('company_name')
+            or profile.company_name
+            or ''
+        )
+
+        profile.is_verified = True
+        profile.save()
+
+        # Generate JWT
+        refresh = RefreshToken.for_user(user)
+
+        # Clear registration session
+        request.session.pop(
+            'registration_data',
+            None
+        )
+
+        return Response(
+            {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'profile': UserProfileSerializer(
+                    profile
+                ).data,
+            },
+            status=status.HTTP_201_CREATED
+        )
 
 # ============================================================
 # Track & Lesson Views
