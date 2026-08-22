@@ -86,231 +86,259 @@ def normalize_phone_number(phone):
 # ============================================================
 
 class OTPRegistrationView(APIView):
-    """Send OTP for registration"""
-    
+    """
+    Send registration OTP.
+
+    Email:
+        Django sends the OTP.
+
+    Phone:
+        Arkesel generates and sends the OTP.
+    """
+
     permission_classes = [permissions.AllowAny]
-    
+
     def post(self, request):
         check_existing = request.data.get('check_existing', True)
+
         serializer = OTPSerializer(
             data=request.data,
             context={'check_existing': check_existing}
         )
-        
+
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         contact = serializer.validated_data['contact'].strip()
         contact_type = serializer.validated_data['contact_type']
 
+        # Normalize phone number
         if contact_type == 'phone':
-            try:
-                contact = normalize_phone_number(contact)
-            except ValueError:
-                return Response(
-                    {'error': 'Invalid phone number format.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        else:
+            contact = self.normalize_phone(contact)
+
+        # Normalize email
+        elif contact_type == 'email':
             contact = contact.lower()
-        
-        # Generate OTP
-        otp_code = ''.join(random.choices(string.digits, k=6))
-        
-        # Delete old OTP
-        OTPVerification.objects.filter(
-            phone_or_email=contact,
-            is_verified=False
-        ).delete()
-        
-        # Create new OTP
-        expires_at = now() + timedelta(minutes=10)
-        otp = OTPVerification.objects.create(
-            phone_or_email=contact,
-            otp_code=otp_code,
-            expires_at=expires_at
-        )
 
-        try:
-            if contact_type == 'phone':
-                self._send_sms(contact, otp_code)
-            else:
-                self._send_email(contact, otp_code)
+        # --------------------------------------------------
+        # PHONE OTP
+        # --------------------------------------------------
 
-        except Exception as exc:
-            otp.delete()
+        if contact_type == 'phone':
 
-            print(
-                f'[OTP DELIVERY ERROR] {exc}',
-                flush=True
+            try:
+                self._send_arkesel_otp(contact)
+
+            except Exception as e:
+                print(f'[OTP DELIVERY ERROR] {e}', flush=True)
+
+                return Response(
+                    {
+                        'error': 'Unable to send verification SMS.',
+                        'detail': str(e),
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+
+        # --------------------------------------------------
+        # EMAIL OTP
+        # --------------------------------------------------
+
+        else:
+
+            otp_code = ''.join(
+                random.choices(string.digits, k=6)
             )
 
-            return Response(
-                {
-                    'error': (
-                        'We could not send your verification code. '
-                        'Please try again.'
-                    )
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            OTPVerification.objects.filter(
+                phone_or_email=contact,
+                is_verified=False
+            ).delete()
+
+            expires_at = now() + timedelta(minutes=10)
+
+            OTPVerification.objects.create(
+                phone_or_email=contact,
+                otp_code=otp_code,
+                expires_at=expires_at
             )
-        
-        # Store registration data in session for later use
+
+            self._send_email(contact, otp_code)
+
+        # --------------------------------------------------
+        # Store registration data
+        # --------------------------------------------------
+
         request.session['registration_data'] = {
             'contact': contact,
             'contact_type': contact_type,
-            'business_function': serializer.validated_data.get('business_function') or '',
-            'country': serializer.validated_data.get('country') or '',
-            'company_name': serializer.validated_data.get('company_name') or '',
+            'business_function': (
+                serializer.validated_data.get('business_function') or ''
+            ),
+            'country': (
+                serializer.validated_data.get('country') or ''
+            ),
+            'company_name': (
+                serializer.validated_data.get('company_name') or ''
+            ),
         }
-        
-        return Response({
-            'message': f'OTP sent to {contact}',
-            'otp_id': str(otp.id),
-        }, status=status.HTTP_200_OK)
-    
-    def _send_sms(self, phone, code):
+
+        return Response(
+            {
+                'message': f'OTP sent to {contact}',
+                'contact_type': contact_type,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    # ------------------------------------------------------
+    # Normalize international phone numbers
+    # ------------------------------------------------------
+
+    def normalize_phone(self, phone):
         """
-        Send OTP SMS through Arkesel.
+        Convert phone numbers to international format.
+
+        Examples:
+
+        0241234567       -> 233241234567
+        +233241234567    -> 233241234567
+        233241234567     -> 233241234567
+        +447911123456    -> 447911123456
+        447911123456     -> 447911123456
         """
 
-        api_key = config('ARKESEL_API_KEY', default='').strip()
-        sender = config('ARKESEL_SENDER', default='PAAIS').strip()
-
-        if not api_key:
-            print('[ARKESEL] API key is missing', flush=True)
-            raise RuntimeError('SMS service is not configured.')
-
-        if not sender:
-            print('[ARKESEL] Sender ID is missing', flush=True)
-            raise RuntimeError('SMS sender is not configured.')
-
-        # Keep the international number exactly as supplied.
         phone = str(phone).strip()
-
-        # Make sure Ghana/local numbers are converted to international format.
-        if phone.startswith('0'):
-            phone = '+233' + phone[1:]
 
         # Remove spaces, hyphens and brackets
         phone = (
-            phone.replace(' ', '')
-                 .replace('-', '')
-                 .replace('(', '')
-                 .replace(')', '')
+            phone
+            .replace(' ', '')
+            .replace('-', '')
+            .replace('(', '')
+            .replace(')', '')
         )
 
-        message = (
-            f'Your PAAIS Academy verification code is {code}. '
-            f'It expires in 10 minutes.'
+        # +233... -> 233...
+        if phone.startswith('+'):
+            phone = phone[1:]
+
+        # Ghana local number
+        if phone.startswith('0'):
+            phone = '233' + phone[1:]
+
+        return phone
+
+    # ------------------------------------------------------
+    # Arkesel OTP
+    # ------------------------------------------------------
+
+    def _send_arkesel_otp(self, phone):
+
+        api_key = config('ARKESEL_API_KEY')
+
+        sender_id = config(
+            'ARKESEL_OTP_SENDER_ID',
+            default='PAAIS'
         )
 
-        url = 'https://sms.arkesel.com/api/v2/sms/send'
-
-        payload = {
-            'sender': sender,
-            'message': message,
-            'recipients': [phone],
-        }
+        url = 'https://sms.arkesel.com/api/otp/generate'
 
         headers = {
             'api-key': api_key,
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
         }
 
+        payload = {
+            'expiry': 10,
+            'length': 6,
+            'medium': 'sms',
+            'message': (
+                'Your PAAIS Academy verification code is '
+                '%otp_code%. It expires in %expiry% minutes.'
+            ),
+            'number': phone,
+            'sender_id': sender_id,
+            'type': 'numeric',
+        }
+
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=20,
+        )
+
         try:
-            response = requests.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=20,
+            data = response.json()
+        except ValueError:
+            data = {
+                'raw_response': response.text
+            }
+
+        print(
+            f'[Arkesel OTP RESPONSE] '
+            f'HTTP {response.status_code}: {data}',
+            flush=True
+        )
+
+        # HTTP-level failure
+        if response.status_code != 200:
+            raise RuntimeError(
+                f'Arkesel HTTP {response.status_code}: {data}'
             )
 
-            print(
-                f'[ARKESEL] HTTP STATUS: {response.status_code}',
-                flush=True
-            )
+        # Arkesel application-level failure
+        code = str(data.get('code', ''))
 
-            print(
-                f'[ARKESEL] RESPONSE: {response.text}',
-                flush=True
-            )
-
-            if not response.ok:
-                raise RuntimeError(
-                    f'Arkesel HTTP error: {response.status_code}'
-                )
-
-            try:
-                data = response.json()
-            except ValueError:
-                raise RuntimeError(
-                    'Arkesel returned an invalid response.'
-                )
-
-            if data.get('status') != 'success':
-                print(
-                    f'[ARKESEL ERROR] {data}',
-                    flush=True
-                )
-
-                raise RuntimeError(
-                    data.get('message', 'Unable to send verification SMS.')
-                )
-
-            print(
-                f'[ARKESEL SUCCESS] SMS accepted for {phone}',
-                flush=True
-            )
-
-            return data
-
-        except requests.RequestException as exc:
-            print(
-                f'[ARKESEL NETWORK ERROR] {exc}',
-                flush=True
-            )
+        if code != '1000':
+            error_messages = {
+                '1001': 'Missing required OTP field.',
+                '1002': 'OTP message does not contain %otp_code%.',
+                '1003': 'The sender ID has been blocked by Arkesel.',
+                '1004': 'SMS gateway is inactive or credentials are missing.',
+                '1005': 'Invalid phone number.',
+                '1006': 'OTP is not allowed in this country.',
+                '1007': 'Insufficient balance.',
+                '1008': 'Insufficient balance.',
+                '1009': 'Voice message exceeds the allowed length.',
+                '1011': 'Arkesel internal error.',
+            }
 
             raise RuntimeError(
-                'Unable to connect to SMS provider.'
+                error_messages.get(
+                    code,
+                    f'Arkesel OTP error: {data}'
+                )
             )
 
-    def _send_email(self, email, code):
-        """Print OTPs in development and email them in production."""
-        if settings.DEBUG:
-            print('\n' + '=' * 60, flush=True)
-            print(f'PAAIS ACADEMY OTP FOR {email}: {code}', flush=True)
-            print('Development mode: no email was sent.', flush=True)
-            print('=' * 60 + '\n', flush=True)
-            return
-
-        send_mail(
-            subject='Your PAAIS Academy verification code',
-            message=(
-                f'Your PAAIS Academy verification code is: {code}\n\n'
-                'This code expires in 10 minutes. If you did not request it, '
-                'you can safely ignore this email.'
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
-        )
+        return data
 
 
 class OTPVerifyView(APIView):
-    """Verify OTP and create user account."""
+    """
+    Verify registration OTP.
+
+    Phone:
+        Verify through Arkesel.
+
+    Email:
+        Verify against Django's OTPVerification table.
+    """
 
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = OTPVerifySerializer(data=request.data)
+
+        serializer = OTPVerifySerializer(
+            data=request.data
+        )
 
         if not serializer.is_valid():
-            print(
-                f'[OTP VERIFY VALIDATION ERROR] {serializer.errors}',
-                flush=True
-            )
-
             return Response(
                 serializer.errors,
                 status=status.HTTP_400_BAD_REQUEST
@@ -319,156 +347,298 @@ class OTPVerifyView(APIView):
         contact = serializer.validated_data['contact'].strip()
         otp_code = serializer.validated_data['otp_code'].strip()
 
-        # Normalize phone numbers, but preserve emails.
-        if '@' in contact:
-            contact = contact.lower()
-        else:
-            try:
-                contact = normalize_phone_number(contact)
-            except ValueError:
-                return Response(
-                    {'error': 'Invalid phone number format.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        print(
-            f'[OTP VERIFY] Contact: {contact}',
-            flush=True
-        )
-
-        print(
-            f'[OTP VERIFY] OTP: {otp_code}',
-            flush=True
-        )
-
-        try:
-            otp = OTPVerification.objects.get(
-                phone_or_email=contact,
-                otp_code=otp_code,
-                is_verified=False
-            )
-
-        except OTPVerification.DoesNotExist:
-
-            otp_exists = OTPVerification.objects.filter(
-                phone_or_email=contact,
-                is_verified=False
-            ).first()
-
-            if otp_exists:
-                otp_exists.attempts += 1
-                otp_exists.save(update_fields=['attempts'])
-
-            print(
-                '[OTP VERIFY] Invalid OTP',
-                flush=True
-            )
-
-            return Response(
-                {'error': 'Invalid OTP'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check expiry
-        if otp.is_expired():
-            otp.delete()
-
-            return Response(
-                {'error': 'OTP expired'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check attempts
-        if otp.attempts >= 3:
-            otp.delete()
-
-            return Response(
-                {'error': 'Too many attempts'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Mark OTP as verified
-        otp.is_verified = True
-        otp.save(update_fields=['is_verified'])
-
-        # Retrieve registration information
-        reg_data = request.session.get(
+        registration_data = request.session.get(
             'registration_data',
             {}
         )
 
-        # Create or retrieve user
-        if '@' in contact:
+        contact_type = registration_data.get('contact_type')
 
-            user, created = User.objects.get_or_create(
-                email=contact,
-                defaults={
-                    'username': contact.split('@')[0]
-                }
+        if not contact_type:
+
+            # Determine automatically if session is unavailable
+            contact_type = (
+                'email'
+                if '@' in contact
+                else 'phone'
             )
+
+        # Normalize phone
+        if contact_type == 'phone':
+            contact = self.normalize_phone(contact)
+
+        else:
+            contact = contact.lower()
+
+        # ==================================================
+        # PHONE VERIFICATION — ARKESEL
+        # ==================================================
+
+        if contact_type == 'phone':
+
+            try:
+
+                result = self._verify_arkesel_otp(
+                    contact,
+                    otp_code
+                )
+
+                if not result:
+                    return Response(
+                        {
+                            'error': 'Invalid or expired OTP.'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            except Exception as e:
+
+                print(
+                    f'[Arkesel OTP VERIFY ERROR] {e}',
+                    flush=True
+                )
+
+                return Response(
+                    {
+                        'error': str(e)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # ==================================================
+        # EMAIL VERIFICATION — DJANGO
+        # ==================================================
 
         else:
 
-            username = f"user_{contact[-6:]}"
+            try:
 
-            user, created = User.objects.get_or_create(
-                username=username,
-                defaults={
-                    'email': f"{username}@paaisacademy.com"
-                }
+                otp = OTPVerification.objects.get(
+                    phone_or_email=contact,
+                    otp_code=otp_code,
+                    is_verified=False
+                )
+
+            except OTPVerification.DoesNotExist:
+
+                return Response(
+                    {'error': 'Invalid OTP'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if otp.is_expired():
+
+                otp.delete()
+
+                return Response(
+                    {'error': 'OTP expired'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if otp.attempts >= 3:
+
+                otp.delete()
+
+                return Response(
+                    {'error': 'Too many attempts'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            otp.is_verified = True
+            otp.save()
+
+        # ==================================================
+        # CREATE USER
+        # ==================================================
+
+        try:
+
+            if '@' in contact:
+
+                user, created = User.objects.get_or_create(
+                    email=contact,
+                    defaults={
+                        'username': contact.split('@')[0]
+                    }
+                )
+
+            else:
+
+                username = f"user_{contact[-6:]}"
+
+                user, created = User.objects.get_or_create(
+                    username=username,
+                    defaults={
+                        'email': (
+                            f'{username}@paaisacademy.com'
+                        )
+                    }
+                )
+
+            # Profile
+            profile, _ = UserProfile.objects.get_or_create(
+                user=user
             )
 
-        # Create/update profile
-        profile, _ = UserProfile.objects.get_or_create(
-            user=user
+            if contact_type == 'phone':
+                profile.phone = contact
+
+            profile.business_function = (
+                registration_data.get(
+                    'business_function'
+                )
+                or profile.business_function
+                or ''
+            )
+
+            profile.country = (
+                registration_data.get('country')
+                or profile.country
+                or ''
+            )
+
+            profile.company_name = (
+                registration_data.get(
+                    'company_name'
+                )
+                or profile.company_name
+                or ''
+            )
+
+            profile.is_verified = True
+            profile.save()
+
+            # JWT
+            refresh = RefreshToken.for_user(user)
+
+            # Clear registration session
+            request.session.pop(
+                'registration_data',
+                None
+            )
+
+            return Response(
+                {
+                    'user_id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'profile': UserProfileSerializer(
+                        profile
+                    ).data,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+
+            print(
+                f'[REGISTRATION ERROR] {e}',
+                flush=True
+            )
+
+            return Response(
+                {
+                    'error': 'Unable to complete registration.'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    # ------------------------------------------------------
+    # Arkesel verification
+    # ------------------------------------------------------
+
+    def _verify_arkesel_otp(self, phone, code):
+
+        api_key = config('ARKESEL_API_KEY')
+
+        url = 'https://sms.arkesel.com/api/otp/verify'
+
+        headers = {
+            'api-key': api_key,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+
+        payload = {
+            'code': code,
+            'number': phone,
+        }
+
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=20,
         )
 
-        if '@' not in contact:
-            profile.phone = contact
+        try:
+            data = response.json()
+        except ValueError:
+            data = {
+                'raw_response': response.text
+            }
 
-        profile.business_function = (
-            reg_data.get('business_function')
-            or profile.business_function
-            or ''
+        print(
+            f'[Arkesel OTP VERIFY RESPONSE] '
+            f'HTTP {response.status_code}: {data}',
+            flush=True
         )
 
-        profile.country = (
-            reg_data.get('country')
-            or profile.country
-            or ''
+        if response.status_code != 200:
+
+            raise RuntimeError(
+                f'Arkesel verification HTTP '
+                f'{response.status_code}: {data}'
+            )
+
+        code_response = str(
+            data.get('code', '')
         )
 
-        profile.company_name = (
-            reg_data.get('company_name')
-            or profile.company_name
-            or ''
+        if code_response == '1100':
+            return True
+
+        error_messages = {
+            '1101': 'Missing required verification field.',
+            '1102': 'Invalid phone number.',
+            '1103': 'Invalid phone number.',
+            '1104': 'Invalid OTP code.',
+            '1105': 'OTP code has expired.',
+            '1106': 'Arkesel internal error.',
+        }
+
+        raise RuntimeError(
+            error_messages.get(
+                code_response,
+                f'Arkesel OTP verification failed: {data}'
+            )
         )
 
-        profile.is_verified = True
-        profile.save()
+    # ------------------------------------------------------
+    # Normalize phone
+    # ------------------------------------------------------
 
-        # Generate JWT
-        refresh = RefreshToken.for_user(user)
+    def normalize_phone(self, phone):
 
-        # Clear registration session
-        request.session.pop(
-            'registration_data',
-            None
+        phone = str(phone).strip()
+
+        phone = (
+            phone
+            .replace(' ', '')
+            .replace('-', '')
+            .replace('(', '')
+            .replace(')', '')
         )
 
-        return Response(
-            {
-                'user_id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'profile': UserProfileSerializer(
-                    profile
-                ).data,
-            },
-            status=status.HTTP_201_CREATED
-        )
+        if phone.startswith('+'):
+            phone = phone[1:]
+
+        if phone.startswith('0'):
+            phone = '233' + phone[1:]
+
+        return phone
 
 # ============================================================
 # Track & Lesson Views
