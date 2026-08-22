@@ -1,14 +1,13 @@
 import os
 import sys
+from pathlib import Path
 
-BASE_DIR = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
+# Project directory:
+# /paais_academy/
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
