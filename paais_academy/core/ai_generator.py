@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Config — override LESSON_AI_MODEL in settings.py if needed
 # ---------------------------------------------------------------------------
 
-AI_MODEL = getattr(settings, "LESSON_AI_MODEL", "claude-3-5-sonnet")
+AI_MODEL = getattr(settings, "LESSON_AI_MODEL", "claude-sonnet-5")
 AI_MAX_TOKENS = getattr(settings, "LESSON_AI_MAX_TOKENS", 4000)
 
 

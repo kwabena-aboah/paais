@@ -220,6 +220,8 @@ CELERY_TASK_SERIALIZER = 'json'
 
 # Anthropic API Key
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+LESSON_AI_MODEL = config('LESSON_AI_MODEL', default='')
+LESSON_AI_MAX_TOKENS = config('LESSON_AI_MAX_TOKENS', default='')
 
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10
