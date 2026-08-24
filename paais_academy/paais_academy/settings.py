@@ -7,7 +7,7 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m&_ycs7$%4*ypq=0zr+q^0eq6d@_=sn!-hz8el!!t8(^-j&_kp'
+SECRET_KEY = ''
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
@@ -220,17 +220,16 @@ CELERY_TASK_SERIALIZER = 'json'
 
 # Anthropic API Key
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
-AI_MODELS = {
-    "fast": os.getenv(
-        "ANTHROPIC_FAST_MODEL",
-        "claude-sonnet-4-5"
-    ),
-    "quality": os.getenv(
-        "ANTHROPIC_QUALITY_MODEL",
-        "claude-sonnet-4-5"
-    ),
-}
-AI_MAX_TOKENS = config('LESSON_AI_MAX_TOKENS', default='4000')
+LESSON_AI_MODEL = config(
+    "LESSON_AI_MODEL",
+    default=""
+)
+
+LESSON_AI_MAX_TOKENS = config(
+    "LESSON_AI_MAX_TOKENS",
+    default=4000,
+    cast=int,
+)
 
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10
