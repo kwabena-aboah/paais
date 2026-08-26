@@ -222,7 +222,7 @@ CELERY_TASK_SERIALIZER = 'json'
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 LESSON_AI_MODEL = config(
     "LESSON_AI_MODEL",
-    default="claude-sonnet-4-5"
+    default="claude-sonnet-5"
 )
 
 LESSON_AI_MAX_TOKENS = config(
