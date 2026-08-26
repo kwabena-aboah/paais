@@ -1,4 +1,4 @@
-```python
+
 """
 PAAIS Academy - AI Lesson Generator
 
@@ -1123,4 +1123,3 @@ def _log_generation(
         output_tokens=output_tokens,
         duration_seconds=elapsed or 0,
     )
-```

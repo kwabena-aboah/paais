@@ -7,7 +7,7 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = ''
+SECRET_KEY = 'django-insecure-m&_ycs7$%4*ypq=0zr+q^0eq6d@_=sn!-hz8el!!t8(^-j&_kp'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
@@ -84,7 +84,7 @@ WSGI_APPLICATION = 'paais_academy.wsgi.application'
 # Supabase PostgreSQL connection
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
+        # default=os.environ.get('DATABASE_URL'),
         conn_max_age=0,
         ssl_require=True,
     )
@@ -222,7 +222,7 @@ CELERY_TASK_SERIALIZER = 'json'
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 LESSON_AI_MODEL = config(
     "LESSON_AI_MODEL",
-    default=""
+    default="claude-sonnet-4-5"
 )
 
 LESSON_AI_MAX_TOKENS = config(
